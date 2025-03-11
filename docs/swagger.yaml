@@ -1,71 +1,281 @@
 definitions:
-  models.Subject:
+  dto.CreateSubjectDto:
     properties:
+      name:
+        type: string
+    type: object
+  dto.CreateUserDto:
+    properties:
+      email:
+        type: string
+      name:
+        type: string
+      subject_id:
+        type: integer
+    type: object
+  dto.UpdateSubjectDto:
+    properties:
+      name:
+        type: string
+      status:
+        type: boolean
+    type: object
+  dto.UpdateUserDto:
+    properties:
+      email:
+        type: string
+      name:
+        type: string
+      status:
+        type: boolean
+      subject_id:
+        type: integer
+    type: object
+  entity.Subject:
+    properties:
+      created_at:
+        type: string
       id:
         type: integer
       name:
         type: string
       status:
         type: boolean
+      updated_at:
+        type: string
+      user:
+        items:
+          $ref: '#/definitions/entity.User'
+        type: array
     type: object
-  models.User:
+  entity.User:
     properties:
+      created_at:
+        type: string
       email:
         type: string
       id:
         type: integer
       name:
         type: string
-      password:
-        type: string
       status:
         type: boolean
+      subject_id:
+        type: integer
+      updated_at:
+        type: string
     type: object
 info:
   contact: {}
 paths:
-  /subjects:
+  /api/v1/subjects:
+    get:
+      consumes:
+      - application/json
+      description: Get a list of all subjects
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/entity.Subject'
+            type: array
+      summary: Get all subjects
+      tags:
+      - subjects
     post:
       consumes:
       - application/json
-      description: Create a new subject with the input payload
+      description: Create a new subject
       parameters:
-      - description: Create subject
+      - description: Subject data
         in: body
         name: subject
         required: true
         schema:
-          $ref: '#/definitions/models.Subject'
+          $ref: '#/definitions/dto.CreateSubjectDto'
       produces:
       - application/json
       responses:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/models.Subject'
-      summary: Create a new subject
+            $ref: '#/definitions/entity.Subject'
+      summary: Create a subject
       tags:
       - subjects
-  /users:
+  /api/v1/subjects/{id}:
+    get:
+      consumes:
+      - application/json
+      description: Get a single subject by ID
+      parameters:
+      - description: Subject ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/entity.Subject'
+      summary: Get subject by ID
+      tags:
+      - subjects
+  /api/v1/subjects/delete/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Remove a subject by ID
+      parameters:
+      - description: Subject ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+      summary: Delete a subject
+      tags:
+      - subjects
+  /api/v1/subjects/update/{id}:
+    put:
+      consumes:
+      - application/json
+      description: Update subject details
+      parameters:
+      - description: Subject ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Updated subject data
+        in: body
+        name: subject
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UpdateSubjectDto'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/entity.Subject'
+      summary: Update a subject
+      tags:
+      - subjects
+  /api/v1/users:
+    get:
+      consumes:
+      - application/json
+      description: Get list of all users
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/entity.User'
+            type: array
+      summary: Get all users
+      tags:
+      - users
     post:
       consumes:
       - application/json
-      description: Create a new user with the input payload
+      description: Create a new user
       parameters:
-      - description: Create user
+      - description: User data
         in: body
         name: user
         required: true
         schema:
-          $ref: '#/definitions/models.User'
+          $ref: '#/definitions/dto.CreateUserDto'
       produces:
       - application/json
       responses:
         "201":
           description: Created
           schema:
-            $ref: '#/definitions/models.User'
-      summary: Create a new user
+            $ref: '#/definitions/entity.User'
+      summary: Create a user
+      tags:
+      - users
+  /api/v1/users/{id}:
+    get:
+      consumes:
+      - application/json
+      description: Get a single user by ID
+      parameters:
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/entity.User'
+      summary: Get user by ID
+      tags:
+      - users
+  /api/v1/users/delete/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Remove a user by ID
+      parameters:
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+      summary: Delete a user
+      tags:
+      - users
+  /api/v1/users/update/{id}:
+    put:
+      consumes:
+      - application/json
+      description: Update user details
+      parameters:
+      - description: User ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Updated user data
+        in: body
+        name: user
+        required: true
+        schema:
+          $ref: '#/definitions/dto.UpdateUserDto'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/entity.User'
+      summary: Update a user
       tags:
       - users
 swagger: "2.0"

@@ -4,8 +4,8 @@
 // Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
 // Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
 
-generator client {
-  provider = "prisma-client-js"
+generator db {
+  provider = "go run github.com/steebchen/prisma-client-go"
 }
 
 datasource db {
@@ -14,20 +14,25 @@ datasource db {
 }
 
 model User {
-  id       Int     @id @default(autoincrement())
-  name     String
-  email    String
-  password String
-  status   Boolean @default(true)
+  id         Int      @id @default(autoincrement())
+  name       String
+  email      String   @unique
+  subject_id Int?
+  status     Boolean  @default(true)
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  updated_at DateTime @default(now()) @db.Timestamptz(6)
+  subject    Subject? @relation(fields: [subject_id], references: [id])
 
   @@map("users")
 }
 
 model Subject {
-  id      Int     @id @default(autoincrement())
-  name_en String
-  name_la String
-  status  Boolean @default(true)
+  id         Int      @id @default(autoincrement())
+  name       String
+  status     Boolean  @default(true)
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  updated_at DateTime @default(now()) @db.Timestamptz(6)
+  user       User[]
 
   @@map("subjects")
 }
