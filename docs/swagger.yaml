@@ -127,6 +127,19 @@ paths:
       summary: Get subject by ID
       tags:
       - subjects
+  /api/v1/subjects/clear-cache:
+    delete:
+      consumes:
+      - application/json
+      description: Clear the cache of subjects
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+      summary: Clear cache of subjects
+      tags:
+      - subjects
   /api/v1/subjects/delete/{id}:
     delete:
       consumes:
@@ -230,6 +243,19 @@ paths:
           schema:
             $ref: '#/definitions/entity.User'
       summary: Get user by ID
+      tags:
+      - users
+  /api/v1/users/clear-cache:
+    delete:
+      consumes:
+      - application/json
+      description: Clear the cache of users
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+      summary: Clear cache of users
       tags:
       - users
   /api/v1/users/delete/{id}:

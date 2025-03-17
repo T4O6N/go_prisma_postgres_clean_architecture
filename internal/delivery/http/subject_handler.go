@@ -1,6 +1,7 @@
 package delivery
 
 import (
+	"context"
 	"net/http"
 	"sample-project/internal/dto"
 	"sample-project/internal/entity"
@@ -10,10 +11,12 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// NOTE - subject handler struct
 type SubjectHandler struct {
 	useCase usecase.SubjectUsecase
 }
 
+// NOTE - new subject handler
 func NewSubjectHandler(router *gin.Engine, useCase usecase.SubjectUsecase) {
 	handler := &SubjectHandler{useCase: useCase}
 
@@ -24,8 +27,10 @@ func NewSubjectHandler(router *gin.Engine, useCase usecase.SubjectUsecase) {
 	subjects.POST("", handler.CreateSubject)
 	subjects.PUT("/update/:id", handler.UpdateSubject)
 	subjects.DELETE("/delete/:id", handler.DeleteSubject)
+	subjects.DELETE("/clear-cache", handler.ClearSubjectCache)
 }
 
+// NOTE - get all subjects handler
 // @Summary Get all subjects
 // @Description Get a list of all subjects
 // @Tags subjects
@@ -42,6 +47,7 @@ func (h *SubjectHandler) GetSubject(c *gin.Context) {
 	c.JSON(http.StatusOK, subjects)
 }
 
+// NOTE - get subject by id handler
 // @Summary Get subject by ID
 // @Description Get a single subject by ID
 // @Tags subjects
@@ -66,6 +72,7 @@ func (h *SubjectHandler) GetSubjectByID(c *gin.Context) {
 	c.JSON(http.StatusOK, subject)
 }
 
+// NOTE - create subject handler
 // @Summary Create a subject
 // @Description Create a new subject
 // @Tags subjects
@@ -93,6 +100,7 @@ func (h *SubjectHandler) CreateSubject(c *gin.Context) {
 	c.JSON(http.StatusCreated, newSubject)
 }
 
+// NOTE - update subject handler
 // @Summary Update a subject
 // @Description Update subject details
 // @Tags subjects
@@ -124,6 +132,7 @@ func (h *SubjectHandler) UpdateSubject(c *gin.Context) {
 	c.JSON(http.StatusOK, updatedSubject)
 }
 
+// NOTE - delete subject handler
 // @Summary Delete a subject
 // @Description Remove a subject by ID
 // @Tags subjects
@@ -146,4 +155,24 @@ func (h *SubjectHandler) DeleteSubject(c *gin.Context) {
 	}
 
 	c.Status(http.StatusNoContent)
+}
+
+// NOTE - clear cache of subjects handler
+// @Summary Clear cache of subjects
+// @Description Clear the cache of subjects
+// @Tags subjects
+// @Accept json
+// @Produce json
+// @Success 204 "No Content"
+// @Router /api/v1/subjects/clear-cache [delete]
+func (h *SubjectHandler) ClearSubjectCache(c *gin.Context) {
+	ctx := context.Background()
+	err := h.useCase.ClearSubjectCache(ctx)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to clear subjects caches"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Subject caches cleared successfully"})
 }

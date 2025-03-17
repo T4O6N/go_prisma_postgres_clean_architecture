@@ -2,32 +2,50 @@ package repository
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"sample-project/internal/config/cache"
 	"sample-project/internal/entity"
 	"sample-project/internal/utils"
 	"sample-project/prisma/db"
 	"time"
+
+	"github.com/redis/go-redis/v9"
 )
 
+// NOTE - subject repository interface
 type SubjectRepository interface {
 	GetAllSubjects(ctx context.Context) ([]entity.Subject, error)
 	GetSubjectByID(ctx context.Context, id int) (*entity.Subject, error)
 	CreateSubject(ctx context.Context, subject entity.Subject) (*entity.Subject, error)
 	UpdateSubject(ctx context.Context, id int, subject entity.Subject) (*entity.Subject, error)
 	DeleteSubject(ctx context.Context, id int) error
+	ClearSubjectCache(ctx context.Context) error
 }
 
+// NOTE - subject repository struct
 type subjectRepository struct {
-	client *db.PrismaClient
+	client      *db.PrismaClient
+	redisClient *redis.Client
 }
 
-func NewSubjectRepository(client *db.PrismaClient) SubjectRepository {
-	return &subjectRepository{client: client}
+func NewSubjectRepository(client *db.PrismaClient, redisClient *redis.Client) SubjectRepository {
+	return &subjectRepository{client: client, redisClient: redisClient}
 }
 
+// NOTE - get all subjects repository
 func (r *subjectRepository) GetAllSubjects(ctx context.Context) ([]entity.Subject, error) {
-	subjects, err := r.client.Subject.FindMany().With(
-		db.Subject.User.Fetch(),
-	).Exec(ctx)
+	allSubjectsCacheKey := fmt.Sprintf("%sall", cache.SUBJECT_CACHE_KEY)
+
+	cachedSubjects, err := r.redisClient.Get(ctx, allSubjectsCacheKey).Result()
+	if err == nil && cachedSubjects != "" {
+		var subjects []entity.Subject
+		if json.Unmarshal([]byte(cachedSubjects), &subjects) == nil {
+			return subjects, nil
+		}
+	}
+
+	subjects, err := r.client.Subject.FindMany().With(db.Subject.User.Fetch()).Exec(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -54,10 +72,25 @@ func (r *subjectRepository) GetAllSubjects(ctx context.Context) ([]entity.Subjec
 			UpdatedAt: utils.FormatToVientianeTime(s.UpdatedAt),
 		})
 	}
+
+	subjectsJSON, _ := json.Marshal(result)
+	r.redisClient.Set(ctx, allSubjectsCacheKey, string(subjectsJSON), time.Duration(cache.SUBJECT_CACHE_KEY_TTL)*time.Second)
+
 	return result, nil
 }
 
+// NOTE - get subject by id repository
 func (r *subjectRepository) GetSubjectByID(ctx context.Context, id int) (*entity.Subject, error) {
+	subjectCacheKey := fmt.Sprintf("%s%d", cache.SUBJECT_CACHE_KEY, id)
+
+	cachedSubject, err := r.redisClient.Get(ctx, subjectCacheKey).Result()
+	if err == nil && cachedSubject != "" {
+		var subject entity.Subject
+		if json.Unmarshal([]byte(cachedSubject), &subject) == nil {
+			return &subject, nil
+		}
+	}
+
 	subject, err := r.client.Subject.FindUnique(
 		db.Subject.ID.Equals(id),
 	).With(
@@ -79,6 +112,9 @@ func (r *subjectRepository) GetSubjectByID(ctx context.Context, id int) (*entity
 		})
 	}
 
+	subjectData, _ := json.Marshal(subject)
+	r.redisClient.Set(ctx, subjectCacheKey, string(subjectData), time.Duration(cache.SUBJECT_CACHE_KEY_TTL)*time.Second)
+
 	return &entity.Subject{
 		ID:        subject.ID,
 		Name:      subject.Name,
@@ -89,6 +125,7 @@ func (r *subjectRepository) GetSubjectByID(ctx context.Context, id int) (*entity
 	}, nil
 }
 
+// NOTE - create subject repository
 func (r *subjectRepository) CreateSubject(ctx context.Context, subject entity.Subject) (*entity.Subject, error) {
 	newSubject, err := r.client.Subject.CreateOne(
 		db.Subject.Name.Set(subject.Name),
@@ -97,6 +134,8 @@ func (r *subjectRepository) CreateSubject(ctx context.Context, subject entity.Su
 	if err != nil {
 		return nil, err
 	}
+
+	r.redisClient.Del(ctx, fmt.Sprintf("%sall", cache.SUBJECT_CACHE_KEY))
 
 	return &entity.Subject{
 		ID:        newSubject.ID,
@@ -107,6 +146,7 @@ func (r *subjectRepository) CreateSubject(ctx context.Context, subject entity.Su
 	}, nil
 }
 
+// NOTE - update subject repository
 func (r *subjectRepository) UpdateSubject(ctx context.Context, id int, subject entity.Subject) (*entity.Subject, error) {
 	updateSubject, err := r.client.Subject.FindUnique(
 		db.Subject.ID.Equals(id),
@@ -120,6 +160,10 @@ func (r *subjectRepository) UpdateSubject(ctx context.Context, id int, subject e
 		return nil, err
 	}
 
+	subjectCacheKey := fmt.Sprintf("%s%d", cache.SUBJECT_CACHE_KEY, id)
+	r.redisClient.Del(ctx, subjectCacheKey)
+	r.redisClient.Del(ctx, fmt.Sprintf("%sall", cache.SUBJECT_CACHE_KEY))
+
 	return &entity.Subject{
 		ID:        updateSubject.ID,
 		Name:      updateSubject.Name,
@@ -129,9 +173,33 @@ func (r *subjectRepository) UpdateSubject(ctx context.Context, id int, subject e
 	}, nil
 }
 
+// NOTE - delete subject repository
 func (r *subjectRepository) DeleteSubject(ctx context.Context, id int) error {
 	_, err := r.client.Subject.FindUnique(
 		db.Subject.ID.Equals(id),
 	).Delete().Exec(ctx)
+
+	subjectCacheKey := fmt.Sprintf("%s%d", cache.SUBJECT_CACHE_KEY, id)
+	r.redisClient.Del(ctx, subjectCacheKey)
+	r.redisClient.Del(ctx, fmt.Sprintf("%sall", cache.SUBJECT_CACHE_KEY))
+
 	return err
+}
+
+// NOTE - clear subject cache repository
+func (r *subjectRepository) ClearSubjectCache(ctx context.Context) error {
+	pattern := fmt.Sprintf("%s*", cache.SUBJECT_CACHE_KEY)
+	iter := r.redisClient.Scan(ctx, 0, pattern, 0).Iterator()
+
+	for iter.Next(ctx) {
+		if err := r.redisClient.Del(ctx, iter.Val()).Err(); err != nil {
+			return err
+		}
+	}
+
+	if err := iter.Err(); err != nil {
+		return err
+	}
+
+	return nil
 }

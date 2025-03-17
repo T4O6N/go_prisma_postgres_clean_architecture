@@ -8,6 +8,7 @@ import (
 
 	_ "sample-project/docs"
 	"sample-project/internal/config"
+	"sample-project/internal/config/cache"
 	http "sample-project/internal/delivery/http"
 	"sample-project/internal/repository"
 	"sample-project/internal/usecase"
@@ -32,8 +33,8 @@ func main() {
 	}
 
 	// Connect to Redis
-	config.ConnectRedis()
-	// redisClient := config.GetRedisClient()
+	cache.ConnectRedis()
+	redisClient := cache.GetRedisClient()
 
 	router := gin.Default()
 
@@ -48,8 +49,8 @@ func main() {
 	}))
 
 	// Initialize Repositories
-	userRepo := repository.NewUserRepository(client)
-	subjectRepo := repository.NewSubjectRepository(client)
+	userRepo := repository.NewUserRepository(client, redisClient)
+	subjectRepo := repository.NewSubjectRepository(client, redisClient)
 
 	// Initialize Usecases
 	userUsecase := usecase.NewUserUsecase(userRepo)

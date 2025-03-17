@@ -73,6 +73,26 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v1/subjects/clear-cache": {
+            "delete": {
+                "description": "Clear the cache of subjects",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "subjects"
+                ],
+                "summary": "Clear cache of subjects",
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    }
+                }
+            }
+        },
         "/api/v1/subjects/delete/{id}": {
             "delete": {
                 "description": "Remove a subject by ID",
@@ -229,6 +249,26 @@ const docTemplate = `{
                         "schema": {
                             "$ref": "#/definitions/entity.User"
                         }
+                    }
+                }
+            }
+        },
+        "/api/v1/users/clear-cache": {
+            "delete": {
+                "description": "Clear the cache of users",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "users"
+                ],
+                "summary": "Clear cache of users",
+                "responses": {
+                    "204": {
+                        "description": "No Content"
                     }
                 }
             }

@@ -1,27 +1,35 @@
-package config
+package cache
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"os"
 
 	"github.com/redis/go-redis/v9"
 )
 
-var ctx = context.Background()
-var RedisClient *redis.Client
+const (
+	USER_CACHE_KEY    = "users:"
+	SUBJECT_CACHE_KEY = "subjects:"
+)
+
+var (
+	USER_CACHE_KEY_TTL    = 3600
+	SUBJECT_CACHE_KEY_TTL = 3600
+)
+
+var redisClient *redis.Client
 
 func ConnectRedis() {
 	redisURL := os.Getenv("REDIS_URL")
 
 	opt, err := redis.ParseURL(redisURL)
 	if err != nil {
-		fmt.Println("Failed to parse Redis URL: %v", err)
+		log.Fatalf("failed to parse Redis URL: %v", err)
 	}
 
-	RedisClient = redis.NewClient(opt)
-	err = RedisClient.Ping(ctx).Err()
+	redisClient = redis.NewClient(opt)
+	err = redisClient.Ping(context.Background()).Err()
 	if err != nil {
 		log.Fatalf("Failed to connect to Redis: %v", err)
 	}
@@ -29,5 +37,5 @@ func ConnectRedis() {
 }
 
 func GetRedisClient() *redis.Client {
-	return RedisClient
+	return redisClient
 }

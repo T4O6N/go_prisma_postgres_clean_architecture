@@ -1,6 +1,7 @@
 package delivery
 
 import (
+	"context"
 	"net/http"
 	"sample-project/internal/dto"
 	"sample-project/internal/entity"
@@ -11,10 +12,12 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// NOTE - user handler struct
 type UserHandler struct {
 	useCase usecase.UserUseCase
 }
 
+// NOTE - new user handler
 func NewUserHandler(router *gin.Engine, useCase usecase.UserUseCase) {
 	handler := &UserHandler{useCase: useCase}
 
@@ -25,8 +28,10 @@ func NewUserHandler(router *gin.Engine, useCase usecase.UserUseCase) {
 	users.POST("", handler.CreateUser)
 	users.PUT("/update/:id", handler.UpdateUser)
 	users.DELETE("/delete/:id", handler.DeleteUser)
+	users.DELETE("/clear-cache", handler.ClearUserCache)
 }
 
+// NOTE - get all users handler
 // @Summary Get all users
 // @Description Get list of all users
 // @Tags users
@@ -43,6 +48,7 @@ func (h *UserHandler) GetUsers(c *gin.Context) {
 	c.JSON(http.StatusOK, users)
 }
 
+// NOTE - get user by id handler
 // @Summary Get user by ID
 // @Description Get a single user by ID
 // @Tags users
@@ -67,6 +73,7 @@ func (h *UserHandler) GetUserByID(c *gin.Context) {
 	c.JSON(http.StatusOK, user)
 }
 
+// NOTE - create user handler
 // @Summary Create a user
 // @Description Create a new user
 // @Tags users
@@ -102,6 +109,7 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 	c.JSON(http.StatusCreated, newUser)
 }
 
+// NOTE - update user handler
 // @Summary Update a user
 // @Description Update user details
 // @Tags users
@@ -143,6 +151,7 @@ func (h *UserHandler) UpdateUser(c *gin.Context) {
 	c.JSON(http.StatusOK, updatedUser)
 }
 
+// NOTE - delete user handler
 // @Summary Delete a user
 // @Description Remove a user by ID
 // @Tags users
@@ -165,4 +174,24 @@ func (h *UserHandler) DeleteUser(c *gin.Context) {
 	}
 
 	c.Status(http.StatusNoContent)
+}
+
+// NOTE - clear cache of users handler
+// @Summary Clear cache of users
+// @Description Clear the cache of users
+// @Tags users
+// @Accept json
+// @Produce json
+// @Success 204 "No Content"
+// @Router /api/v1/users/clear-cache [delete]
+func (h *UserHandler) ClearUserCache(c *gin.Context) {
+	ctx := context.Background()
+	err := h.useCase.ClearUserCache(ctx)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to clear users caches"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "User caches cleared successfully"})
 }

@@ -2,30 +2,51 @@ package repository
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"sample-project/internal/config/cache"
 	"sample-project/internal/entity"
 	"sample-project/internal/utils"
 	"sample-project/prisma/db"
 	"time"
+
+	"github.com/redis/go-redis/v9"
 )
 
+// NOTE - user repository interface
 type UserRepository interface {
 	GetAllUsers(ctx context.Context) ([]entity.User, error)
 	GetUserByID(ctx context.Context, id int) (*entity.User, error)
 	CreateUser(ctx context.Context, user entity.User) (*entity.User, error)
 	UpdateUser(ctx context.Context, id int, user entity.User) (*entity.User, error)
 	DeleteUser(ctx context.Context, id int) error
+	ClearUserCache(ctx context.Context) error
 }
 
+// NOTE - user repository struct
 type userRepository struct {
-	client *db.PrismaClient
+	client      *db.PrismaClient
+	redisClient *redis.Client
 }
 
-func NewUserRepository(client *db.PrismaClient) UserRepository {
-	return &userRepository{client: client}
+// NOTE - new user repository
+func NewUserRepository(client *db.PrismaClient, redisClient *redis.Client) UserRepository {
+	return &userRepository{client: client, redisClient: redisClient}
 }
 
+// NOTE - get all users repository
 func (r *userRepository) GetAllUsers(ctx context.Context) ([]entity.User, error) {
+	allUsersCacheKey := fmt.Sprintf("%sall", cache.USER_CACHE_KEY)
+
+	// Check Redis Cache First
+	cachedUsers, err := r.redisClient.Get(ctx, allUsersCacheKey).Result()
+	if err == nil && cachedUsers != "" {
+		var users []entity.User
+		if json.Unmarshal([]byte(cachedUsers), &users) == nil {
+			return users, nil
+		}
+	}
+
 	users, err := r.client.User.FindMany().Exec(ctx)
 	if err != nil {
 		return nil, err
@@ -48,16 +69,37 @@ func (r *userRepository) GetAllUsers(ctx context.Context) ([]entity.User, error)
 			UpdatedAt: utils.FormatToVientianeTime(u.UpdatedAt),
 		})
 	}
+
+	// Store in Redis Cache
+	usersJSON, _ := json.Marshal(result)
+	r.redisClient.Set(ctx, allUsersCacheKey, string(usersJSON), time.Duration(cache.USER_CACHE_KEY_TTL)*time.Second)
+
 	return result, nil
 }
 
+// NOTE - get user by id repository
 func (r *userRepository) GetUserByID(ctx context.Context, id int) (*entity.User, error) {
+	userCacheKey := fmt.Sprintf("%s%d", cache.USER_CACHE_KEY, id)
+
+	// Check if user exists in cache
+	cachedUser, err := r.redisClient.Get(ctx, userCacheKey).Result()
+	if err == nil && cachedUser != "" {
+		var user entity.User
+		if json.Unmarshal([]byte(cachedUser), &user) == nil {
+			return &user, nil
+		}
+	}
+
 	user, err := r.client.User.FindUnique(
 		db.User.ID.Equals(id),
 	).Exec(ctx)
 	if err != nil {
 		return nil, err
 	}
+
+	// Store in Redis cache with TTL
+	userData, _ := json.Marshal(user)
+	r.redisClient.Set(ctx, userCacheKey, string(userData), time.Duration(cache.USER_CACHE_KEY_TTL))
 
 	return &entity.User{
 		ID:        user.ID,
@@ -69,6 +111,7 @@ func (r *userRepository) GetUserByID(ctx context.Context, id int) (*entity.User,
 	}, nil
 }
 
+// NOTE - create user repository
 func (r *userRepository) CreateUser(ctx context.Context, user entity.User) (*entity.User, error) {
 	// Check if subject_id exists if it's provided and not zero
 	if user.SubjectID != 0 {
@@ -95,6 +138,8 @@ func (r *userRepository) CreateUser(ctx context.Context, user entity.User) (*ent
 		return nil, err
 	}
 
+	r.redisClient.Del(ctx, fmt.Sprintf("%sall", cache.USER_CACHE_KEY))
+
 	return &entity.User{
 		ID:        newUser.ID,
 		Name:      newUser.Name,
@@ -105,7 +150,15 @@ func (r *userRepository) CreateUser(ctx context.Context, user entity.User) (*ent
 	}, nil
 }
 
+// NOTE - update user repository
 func (r *userRepository) UpdateUser(ctx context.Context, id int, user entity.User) (*entity.User, error) {
+	var updates []db.UserSetParam
+
+	updates = append(updates, db.User.Name.Set(user.Name))
+	updates = append(updates, db.User.Email.Set(user.Email))
+	updates = append(updates, db.User.Status.Set(user.Status))
+	updates = append(updates, db.User.UpdatedAt.Set(utils.FormatToVientianeTime(time.Now())))
+
 	if user.SubjectID != 0 {
 		subject, err := r.client.Subject.FindUnique(
 			db.Subject.ID.Equals(user.SubjectID),
@@ -114,21 +167,24 @@ func (r *userRepository) UpdateUser(ctx context.Context, id int, user entity.Use
 		if err != nil || subject == nil {
 			return nil, fmt.Errorf("subject with ID: %d not found", user.SubjectID)
 		}
+
+		updates = append(updates, db.User.SubjectID.Set(user.SubjectID))
 	}
 
 	updateUser, err := r.client.User.FindUnique(
 		db.User.ID.Equals(id),
 	).Update(
-		db.User.Name.Set(user.Name),
-		db.User.Email.Set(user.Email),
-		db.User.SubjectID.Set(user.SubjectID),
-		db.User.Status.Set(user.Status),
-		db.User.UpdatedAt.Set(utils.FormatToVientianeTime(time.Now())),
+		updates...,
 	).Exec(ctx)
 
 	if err != nil {
 		return nil, err
 	}
+
+	// clear cache after updating
+	userCacheKey := fmt.Sprintf("%s%d", cache.USER_CACHE_KEY, id)
+	r.redisClient.Del(ctx, userCacheKey)
+	r.redisClient.Del(ctx, fmt.Sprintf("%sall", cache.USER_CACHE_KEY))
 
 	return &entity.User{
 		ID:        updateUser.ID,
@@ -141,10 +197,33 @@ func (r *userRepository) UpdateUser(ctx context.Context, id int, user entity.Use
 	}, nil
 }
 
+// NOTE - delete user repository
 func (r *userRepository) DeleteUser(ctx context.Context, id int) error {
 	_, err := r.client.User.FindUnique(
 		db.User.ID.Equals(id),
 	).Delete().Exec(ctx)
 
+	userCacheKey := fmt.Sprintf("%s%d", cache.USER_CACHE_KEY, id)
+	r.redisClient.Del(ctx, userCacheKey)
+	r.redisClient.Del(ctx, fmt.Sprintf("%sall", cache.USER_CACHE_KEY))
+
 	return err
+}
+
+// NOTE - clear user cache repository
+func (r *userRepository) ClearUserCache(ctx context.Context) error {
+	pattern := fmt.Sprintf("%s*", cache.USER_CACHE_KEY)
+	iter := r.redisClient.Scan(ctx, 0, pattern, 0).Iterator()
+
+	for iter.Next(ctx) {
+		if err := r.redisClient.Del(ctx, iter.Val()).Err(); err != nil {
+			return err
+		}
+	}
+
+	if err := iter.Err(); err != nil {
+		return err
+	}
+
+	return nil
 }
