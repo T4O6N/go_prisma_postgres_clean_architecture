@@ -15,7 +15,7 @@ import (
 
 // NOTE - user repository interface
 type UserRepository interface {
-	GetAllUsers(ctx context.Context) ([]entity.User, error)
+	GetAllUsers(ctx context.Context, page, limit int, name string) ([]entity.User, int, error)
 	GetUserByID(ctx context.Context, id int) (*entity.User, error)
 	CreateUser(ctx context.Context, user entity.User) (*entity.User, error)
 	UpdateUser(ctx context.Context, id int, user entity.User) (*entity.User, error)
@@ -35,21 +35,32 @@ func NewUserRepository(client *db.PrismaClient, redisClient *redis.Client) UserR
 }
 
 // NOTE - get all users repository
-func (r *userRepository) GetAllUsers(ctx context.Context) ([]entity.User, error) {
-	allUsersCacheKey := fmt.Sprintf("%sall", cache.USER_CACHE_KEY)
+func (r *userRepository) GetAllUsers(ctx context.Context, page, limit int, name string) ([]entity.User, int, error) {
+	offset := (page - 1) * limit
+	allUsersCacheKey := fmt.Sprintf("%sall_page%d_limit%d_name%s", cache.USER_CACHE_KEY, page, limit, name)
 
 	// Check Redis Cache First
 	cachedUsers, err := r.redisClient.Get(ctx, allUsersCacheKey).Result()
 	if err == nil && cachedUsers != "" {
 		var users []entity.User
 		if json.Unmarshal([]byte(cachedUsers), &users) == nil {
-			return users, nil
+			return users, len(users), nil
 		}
 	}
 
-	users, err := r.client.User.FindMany().Exec(ctx)
+	whereClause := []db.UserWhereParam{}
+	if name != "" {
+		whereClause = append(whereClause, db.User.Name.Contains(name))
+	}
+
+	// Fetch users from DB
+	users, err := r.client.User.FindMany(whereClause...).
+		Skip(offset).
+		Take(limit).
+		OrderBy(db.User.CreatedAt.Order(db.SortOrderDesc)).
+		Exec(ctx)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	var result []entity.User
@@ -74,7 +85,7 @@ func (r *userRepository) GetAllUsers(ctx context.Context) ([]entity.User, error)
 	usersJSON, _ := json.Marshal(result)
 	r.redisClient.Set(ctx, allUsersCacheKey, string(usersJSON), time.Duration(cache.USER_CACHE_KEY_TTL)*time.Second)
 
-	return result, nil
+	return result, len(result), nil
 }
 
 // NOTE - get user by id repository
@@ -138,7 +149,8 @@ func (r *userRepository) CreateUser(ctx context.Context, user entity.User) (*ent
 		return nil, err
 	}
 
-	r.redisClient.Del(ctx, fmt.Sprintf("%sall", cache.USER_CACHE_KEY))
+	// Clear cache after create
+	cache.DelWithPattern(ctx, fmt.Sprintf("%sall*", cache.USER_CACHE_KEY))
 
 	return &entity.User{
 		ID:        newUser.ID,
@@ -183,8 +195,8 @@ func (r *userRepository) UpdateUser(ctx context.Context, id int, user entity.Use
 
 	// clear cache after updating
 	userCacheKey := fmt.Sprintf("%s%d", cache.USER_CACHE_KEY, id)
-	r.redisClient.Del(ctx, userCacheKey)
-	r.redisClient.Del(ctx, fmt.Sprintf("%sall", cache.USER_CACHE_KEY))
+	cache.Del(ctx, userCacheKey)
+	cache.DelWithPattern(ctx, fmt.Sprintf("%sall*", cache.USER_CACHE_KEY))
 
 	return &entity.User{
 		ID:        updateUser.ID,
@@ -204,8 +216,8 @@ func (r *userRepository) DeleteUser(ctx context.Context, id int) error {
 	).Delete().Exec(ctx)
 
 	userCacheKey := fmt.Sprintf("%s%d", cache.USER_CACHE_KEY, id)
-	r.redisClient.Del(ctx, userCacheKey)
-	r.redisClient.Del(ctx, fmt.Sprintf("%sall", cache.USER_CACHE_KEY))
+	cache.Del(ctx, userCacheKey)
+	cache.DelWithPattern(ctx, fmt.Sprintf("%sall*", cache.USER_CACHE_KEY))
 
 	return err
 }

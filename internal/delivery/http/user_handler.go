@@ -37,15 +37,42 @@ func NewUserHandler(router *gin.Engine, useCase usecase.UserUseCase) {
 // @Tags users
 // @Accept json
 // @Produce json
-// @Success 200 {array} entity.User
+// @Param page query int false "Page number (default: 1)" minimum(1)
+// @Param limit query int false "Results per page (default: 10)" minimum(1) maximum(100)
+// @Param name query string false "Filter by user name (partial match)"
+// @Success 200 {object} dto.UserListResponseDto
+// @Failure 400 {object} dto.UserErrorResponseDto
+// @Failure 500 {object} dto.UserErrorResponseDto
 // @Router /api/v1/users [get]
 func (h *UserHandler) GetUsers(c *gin.Context) {
-	users, err := h.useCase.GetUsers(c)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	var query dto.UserQueryDto
+
+	if err := c.ShouldBindQuery(&query); err != nil {
 		return
 	}
-	c.JSON(http.StatusOK, users)
+
+	if query.Page == 0 {
+		query.Page = 1
+	}
+	if query.Limit == 0 {
+		query.Limit = 15
+	}
+
+	users, totalCount, err := h.useCase.GetUsers(c, query.Page, query.Limit, query.Name)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, dto.UserErrorResponseDto{Message: "Failed to retrieve usersz"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"data": users,
+		"meta": gin.H{
+			"page":       query.Page,
+			"limit":      query.Limit,
+			"total":      totalCount,
+			"totalPages": (totalCount + query.Limit - 1) / query.Limit,
+		},
+	})
 }
 
 // NOTE - get user by id handler
@@ -56,6 +83,9 @@ func (h *UserHandler) GetUsers(c *gin.Context) {
 // @Produce json
 // @Param id path int true "User ID"
 // @Success 200 {object} entity.User
+// @Failure 404 {object} dto.UserErrorResponseDto
+// @Failure 400 {object} dto.UserErrorResponseDto
+// @Failure 500 {object} dto.UserErrorResponseDto
 // @Router /api/v1/users/{id} [get]
 func (h *UserHandler) GetUserByID(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))

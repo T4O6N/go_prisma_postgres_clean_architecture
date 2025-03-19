@@ -9,7 +9,7 @@ import (
 
 // NOTE - user use case interface
 type UserUseCase interface {
-	GetUsers(ctx context.Context) ([]entity.User, error)
+	GetUsers(ctx context.Context, page, limit int, name string) ([]entity.User, int, error)
 	GetUserByID(ctx context.Context, id int) (*entity.User, error)
 	CreateUser(ctx context.Context, user entity.User) (*entity.User, error)
 	UpdateUser(ctx context.Context, id int, updateUserDto dto.UpdateUserDto) (*entity.User, error)
@@ -28,8 +28,8 @@ func NewUserUsecase(repo repository.UserRepository) UserUseCase {
 }
 
 // NOTE - get all users use case
-func (u *userUsecase) GetUsers(ctx context.Context) ([]entity.User, error) {
-	return u.repo.GetAllUsers(ctx)
+func (u *userUsecase) GetUsers(ctx context.Context, page, limit int, name string) ([]entity.User, int, error) {
+	return u.repo.GetAllUsers(ctx, page, limit, name)
 }
 
 // NOTE - get user by id use case
