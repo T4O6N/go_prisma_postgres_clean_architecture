@@ -3,7 +3,6 @@ package delivery
 import (
 	"context"
 	"net/http"
-	"sample-project/internal/dto"
 	"sample-project/internal/entity"
 	"sample-project/internal/usecase"
 	"strconv"
@@ -40,38 +39,41 @@ func NewUserHandler(router *gin.Engine, useCase usecase.UserUseCase) {
 // @Param page query int false "Page number (default: 1)" minimum(1)
 // @Param limit query int false "Results per page (default: 10)" minimum(1) maximum(100)
 // @Param name query string false "Filter by user name (partial match)"
-// @Success 200 {object} dto.UserListResponseDto
-// @Failure 400 {object} dto.UserErrorResponseDto
-// @Failure 500 {object} dto.UserErrorResponseDto
+// @Param startDate query string false "Filter by start date (format: YYYY-MM-DD)"
+// @Param endDate query string false "Filter by end date (format: YYYY-MM-DD)"
+// @Success 200 {object} entity.UserListResponse
+// @Failure 400 {object} entity.ErrorResponse
+// @Failure 500 {object} entity.ErrorResponse
 // @Router /api/v1/users [get]
 func (h *UserHandler) GetUsers(c *gin.Context) {
-	var query dto.UserQueryDto
-
-	if err := c.ShouldBindQuery(&query); err != nil {
-		return
+	page, err := strconv.Atoi(c.DefaultQuery("page", "1"))
+	if err != nil || page <= 0 {
+		page = 1
 	}
 
-	if query.Page == 0 {
-		query.Page = 1
-	}
-	if query.Limit == 0 {
-		query.Limit = 15
+	limit, err := strconv.Atoi(c.DefaultQuery("limit", "15"))
+	if err != nil || limit <= 0 {
+		limit = 15
 	}
 
-	users, totalCount, err := h.useCase.GetUsers(c, query.Page, query.Limit, query.Name)
+	name := c.DefaultQuery("name", "")
+	startDate := c.DefaultQuery("startDate", "")
+	endDate := c.DefaultQuery("endDate", "")
+
+	users, totalCount, err := h.useCase.GetUsers(c, page, limit, name, startDate, endDate)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, dto.UserErrorResponseDto{Message: "Failed to retrieve usersz"})
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "Failed to retrieve users"})
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"data": users,
 		"meta": gin.H{
-			"page":       query.Page,
-			"limit":      query.Limit,
+			"page":       page,
+			"limit":      limit,
 			"total":      totalCount,
-			"totalPages": (totalCount + query.Limit - 1) / query.Limit,
+			"totalPages": (totalCount + limit - 1) / limit,
 		},
+		"data": users,
 	})
 }
 
@@ -82,10 +84,10 @@ func (h *UserHandler) GetUsers(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param id path int true "User ID"
-// @Success 200 {object} entity.User
-// @Failure 404 {object} dto.UserErrorResponseDto
-// @Failure 400 {object} dto.UserErrorResponseDto
-// @Failure 500 {object} dto.UserErrorResponseDto
+// @Success 200 {object} entity.UserResponse
+// @Failure 404 {object} entity.ErrorResponse
+// @Failure 400 {object} entity.ErrorResponse
+// @Failure 500 {object} entity.ErrorResponse
 // @Router /api/v1/users/{id} [get]
 func (h *UserHandler) GetUserByID(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
@@ -109,34 +111,35 @@ func (h *UserHandler) GetUserByID(c *gin.Context) {
 // @Tags users
 // @Accept json
 // @Produce json
-// @Param user body dto.CreateUserDto true "User data"
-// @Success 201 {object} entity.User
+// @Param user body entity.CreateUserRequest true "User data"
+// @Success 201 {object} entity.UserResponse
+// @Failure 400 {object} entity.ErrorResponse
+// @Failure 500 {object} entity.ErrorResponse
 // @Router /api/v1/users [post]
 func (h *UserHandler) CreateUser(c *gin.Context) {
-	var createUserDto dto.CreateUserDto
-	if err := c.ShouldBindJSON(&createUserDto); err != nil {
+	var req entity.CreateUserRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	user := entity.User{
-		Name:      createUserDto.Name,
-		Email:     createUserDto.Email,
-		SubjectID: createUserDto.SubjectID,
+	newUser := entity.User{
+		Name:      req.Name,
+		Email:     req.Email,
+		SubjectID: req.SubjectID,
+		Status:    true,
 	}
 
-	newUser, err := h.useCase.CreateUser(c, user)
+	createdUser, err := h.useCase.CreateUser(c, newUser)
 	if err != nil {
-		// Check if the error is related to "not found"
 		if strings.Contains(err.Error(), "not found") {
 			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 			return
 		}
-		// For other errors, return internal server error
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusCreated, newUser)
+	c.JSON(http.StatusCreated, createdUser)
 }
 
 // NOTE - update user handler
@@ -146,8 +149,11 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param id path int true "User ID"
-// @Param user body dto.UpdateUserDto true "Updated user data"
-// @Success 200 {object} entity.User
+// @Param user body entity.UpdateUserRequest true "User data"
+// @Success 201 {object} entity.UserResponse
+// @Failure 404 {object} entity.ErrorResponse
+// @Failure 400 {object} entity.ErrorResponse
+// @Failure 500 {object} entity.ErrorResponse
 // @Router /api/v1/users/update/{id} [put]
 func (h *UserHandler) UpdateUser(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
@@ -162,13 +168,20 @@ func (h *UserHandler) UpdateUser(c *gin.Context) {
 		return
 	}
 
-	var updateUserDto dto.UpdateUserDto
-	if err := c.ShouldBindJSON(&updateUserDto); err != nil {
+	var req entity.UpdateUserRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	updatedUser, err := h.useCase.UpdateUser(c, id, updateUserDto)
+	userUpdate := entity.User{
+		Name:      req.Name,
+		Email:     req.Email,
+		Status:    req.Status,
+		SubjectID: req.SubjectID,
+	}
+
+	updatedUser, err := h.useCase.UpdateUser(c, id, userUpdate)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
@@ -189,6 +202,9 @@ func (h *UserHandler) UpdateUser(c *gin.Context) {
 // @Produce json
 // @Param id path int true "User ID"
 // @Success 204 "No Content"
+// @Failure 404 {object} entity.ErrorResponse
+// @Failure 400 {object} entity.ErrorResponse
+// @Failure 500 {object} entity.ErrorResponse
 // @Router /api/v1/users/delete/{id} [delete]
 func (h *UserHandler) DeleteUser(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
@@ -213,6 +229,9 @@ func (h *UserHandler) DeleteUser(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Success 204 "No Content"
+// @Failure 404 {object} entity.ErrorResponse
+// @Failure 400 {object} entity.ErrorResponse
+// @Failure 500 {object} entity.ErrorResponse
 // @Router /api/v1/users/clear-cache [delete]
 func (h *UserHandler) ClearUserCache(c *gin.Context) {
 	ctx := context.Background()

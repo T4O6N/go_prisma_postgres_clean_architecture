@@ -2,17 +2,16 @@ package usecase
 
 import (
 	"context"
-	"sample-project/internal/dto"
 	"sample-project/internal/entity"
 	"sample-project/internal/repository"
 )
 
 // NOTE - user use case interface
 type UserUseCase interface {
-	GetUsers(ctx context.Context, page, limit int, name string) ([]entity.User, int, error)
+	GetUsers(ctx context.Context, page, limit int, name string, startDate, endDate string) ([]entity.User, int, error)
 	GetUserByID(ctx context.Context, id int) (*entity.User, error)
 	CreateUser(ctx context.Context, user entity.User) (*entity.User, error)
-	UpdateUser(ctx context.Context, id int, updateUserDto dto.UpdateUserDto) (*entity.User, error)
+	UpdateUser(ctx context.Context, id int, user entity.User) (*entity.User, error)
 	DeleteUser(ctx context.Context, id int) error
 	ClearUserCache(ctx context.Context) error
 }
@@ -28,8 +27,8 @@ func NewUserUsecase(repo repository.UserRepository) UserUseCase {
 }
 
 // NOTE - get all users use case
-func (u *userUsecase) GetUsers(ctx context.Context, page, limit int, name string) ([]entity.User, int, error) {
-	return u.repo.GetAllUsers(ctx, page, limit, name)
+func (u *userUsecase) GetUsers(ctx context.Context, page, limit int, name string, startDate, endDate string) ([]entity.User, int, error) {
+	return u.repo.GetAllUsers(ctx, page, limit, name, startDate, endDate)
 }
 
 // NOTE - get user by id use case
@@ -43,26 +42,23 @@ func (u *userUsecase) CreateUser(ctx context.Context, user entity.User) (*entity
 }
 
 // NOTE - update user use case
-func (u *userUsecase) UpdateUser(ctx context.Context, id int, updateUserDto dto.UpdateUserDto) (*entity.User, error) {
+func (u *userUsecase) UpdateUser(ctx context.Context, id int, userUpdate entity.User) (*entity.User, error) {
 	user, err := u.repo.GetUserByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
 
-	if updateUserDto.Name != "" {
-		user.Name = updateUserDto.Name
+	if userUpdate.Name != "" {
+		user.Name = userUpdate.Name
+	}
+	if userUpdate.Email != "" {
+		user.Email = userUpdate.Email
 	}
 
-	if updateUserDto.Email != "" {
-		user.Email = updateUserDto.Email
-	}
+	user.Status = userUpdate.Status
 
-	if updateUserDto.Status {
-		user.Status = updateUserDto.Status
-	}
-
-	if updateUserDto.SubjectID != 0 {
-		user.SubjectID = updateUserDto.SubjectID
+	if userUpdate.SubjectID != 0 {
+		user.SubjectID = userUpdate.SubjectID
 	}
 
 	return u.repo.UpdateUser(ctx, id, *user)

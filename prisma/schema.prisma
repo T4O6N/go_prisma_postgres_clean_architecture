@@ -19,6 +19,9 @@ model User {
   email      String   @unique
   subject_id Int?
   status     Boolean  @default(true)
+  day        Int
+  month      Int
+  year       Int
   created_at DateTime @default(now()) @db.Timestamptz(6)
   updated_at DateTime @default(now()) @db.Timestamptz(6)
   subject    Subject? @relation(fields: [subject_id], references: [id])

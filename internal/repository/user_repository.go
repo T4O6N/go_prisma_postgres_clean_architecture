@@ -15,7 +15,7 @@ import (
 
 // NOTE - user repository interface
 type UserRepository interface {
-	GetAllUsers(ctx context.Context, page, limit int, name string) ([]entity.User, int, error)
+	GetAllUsers(ctx context.Context, page, limit int, name string, startDate, endDate string) ([]entity.User, int, error)
 	GetUserByID(ctx context.Context, id int) (*entity.User, error)
 	CreateUser(ctx context.Context, user entity.User) (*entity.User, error)
 	UpdateUser(ctx context.Context, id int, user entity.User) (*entity.User, error)
@@ -35,9 +35,9 @@ func NewUserRepository(client *db.PrismaClient, redisClient *redis.Client) UserR
 }
 
 // NOTE - get all users repository
-func (r *userRepository) GetAllUsers(ctx context.Context, page, limit int, name string) ([]entity.User, int, error) {
+func (r *userRepository) GetAllUsers(ctx context.Context, page, limit int, name string, startDate, endDate string) ([]entity.User, int, error) {
 	offset := (page - 1) * limit
-	allUsersCacheKey := fmt.Sprintf("%sall_page%d_limit%d_name%s", cache.USER_CACHE_KEY, page, limit, name)
+	allUsersCacheKey := fmt.Sprintf("%sall_page%d_limit%d_name%s_start%s_end%s", cache.USER_CACHE_KEY, page, limit, name, startDate, endDate)
 
 	// Check Redis Cache First
 	cachedUsers, err := r.redisClient.Get(ctx, allUsersCacheKey).Result()
@@ -51,6 +51,24 @@ func (r *userRepository) GetAllUsers(ctx context.Context, page, limit int, name 
 	whereClause := []db.UserWhereParam{}
 	if name != "" {
 		whereClause = append(whereClause, db.User.Name.Contains(name))
+	}
+
+	if startDate != "" {
+		startTime, err := time.Parse("2006-01-02", startDate)
+		if err == nil {
+			// Ensure start time is the beginning of the day (00:00:00)
+			startTime = time.Date(startTime.Year(), startTime.Month(), startTime.Day(), 0, 0, 0, 0, time.UTC)
+			whereClause = append(whereClause, db.User.CreatedAt.Gte(startTime))
+		}
+	}
+
+	if endDate != "" {
+		endTime, err := time.Parse("2006-01-02", endDate)
+		if err == nil {
+			// Ensure end time is the last second of the day (23:59:59)
+			endTime = time.Date(endTime.Year(), endTime.Month(), endTime.Day(), 23, 59, 59, 999999999, time.UTC)
+			whereClause = append(whereClause, db.User.CreatedAt.Lte(endTime))
+		}
 	}
 
 	// Fetch users from DB
@@ -136,13 +154,24 @@ func (r *userRepository) CreateUser(ctx context.Context, user entity.User) (*ent
 		}
 	}
 
+	// Get current time in Vientiane timezone
+	currentTime := utils.FormatToVientianeTime(time.Now())
+
+	// Extract day, month, and year from creation time
+	day := currentTime.Day()
+	month := int(currentTime.Month())
+	year := currentTime.Year()
+
 	newUser, err := r.client.User.CreateOne(
 		db.User.Name.Set(user.Name),
 		db.User.Email.Set(user.Email),
+		db.User.Day.Set(day),
+		db.User.Month.Set(month),
+		db.User.Year.Set(year),
 		db.User.SubjectID.Set(user.SubjectID),
 		db.User.Status.Set(user.Status),
-		db.User.CreatedAt.Set(utils.FormatToVientianeTime(time.Now())),
-		db.User.UpdatedAt.Set(utils.FormatToVientianeTime(time.Now())),
+		db.User.CreatedAt.Set(currentTime),
+		db.User.UpdatedAt.Set(currentTime),
 	).Exec(ctx)
 
 	if err != nil {
@@ -157,6 +186,10 @@ func (r *userRepository) CreateUser(ctx context.Context, user entity.User) (*ent
 		Name:      newUser.Name,
 		Email:     newUser.Email,
 		SubjectID: user.SubjectID,
+		Status:    user.Status,
+		Day:       newUser.Day,
+		Month:     newUser.Month,
+		Year:      newUser.Year,
 		CreatedAt: utils.FormatToVientianeTime(newUser.CreatedAt),
 		UpdatedAt: utils.FormatToVientianeTime(newUser.UpdatedAt),
 	}, nil

@@ -18,7 +18,7 @@ func ConnectDB() (*db.PrismaClient, error) {
 	// Check if DATABASE_URL is set
 	dbURL := os.Getenv("DATABASE_URL")
 	if dbURL == "" {
-		slog.Error("DATABASE_URL is not set")
+		slog.Error("DATABASE_URL environment variable is not set")
 		return nil, ErrMissingDatabaseURL
 	}
 
