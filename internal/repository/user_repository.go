@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 	"sample-project/internal/config/cache"
 	"sample-project/internal/entity"
 	"sample-project/internal/utils"
@@ -17,6 +18,7 @@ import (
 type UserRepository interface {
 	GetAllUsers(ctx context.Context, page, limit int, name string, startDate, endDate string) ([]entity.User, int, error)
 	GetUserByID(ctx context.Context, id int) (*entity.User, error)
+	GetUserByName(ctx context.Context, name string) (*entity.User, error)
 	CreateUser(ctx context.Context, user entity.User) (*entity.User, error)
 	UpdateUser(ctx context.Context, id int, user entity.User) (*entity.User, error)
 	DeleteUser(ctx context.Context, id int) error
@@ -92,6 +94,7 @@ func (r *userRepository) GetAllUsers(ctx context.Context, page, limit int, name 
 			ID:        u.ID,
 			Name:      u.Name,
 			Email:     u.Email,
+			Password:  u.Password,
 			SubjectID: subjectID,
 			Status:    u.Status,
 			CreatedAt: utils.FormatToVientianeTime(u.CreatedAt),
@@ -134,6 +137,29 @@ func (r *userRepository) GetUserByID(ctx context.Context, id int) (*entity.User,
 		ID:        user.ID,
 		Name:      user.Name,
 		Email:     user.Email,
+		Password:  user.Password,
+		Status:    user.Status,
+		CreatedAt: utils.FormatToVientianeTime(user.CreatedAt),
+		UpdatedAt: utils.FormatToVientianeTime(user.UpdatedAt),
+	}, nil
+}
+
+// NOTE - get user by email
+func (r *userRepository) GetUserByName(ctx context.Context, name string) (*entity.User, error) {
+	user, err := r.client.User.FindFirst(
+		db.User.Name.Equals(name),
+	).Exec(ctx)
+	if err != nil {
+		slog.Error("Failed to fetch user by name", "name", name, "error", err)
+		return nil, err
+	}
+
+	slog.Info("Fetched user by name", "name", name, "user", user)
+	return &entity.User{
+		ID:        user.ID,
+		Name:      user.Name,
+		Email:     user.Email,
+		Password:  user.Password,
 		Status:    user.Status,
 		CreatedAt: utils.FormatToVientianeTime(user.CreatedAt),
 		UpdatedAt: utils.FormatToVientianeTime(user.UpdatedAt),
@@ -142,6 +168,12 @@ func (r *userRepository) GetUserByID(ctx context.Context, id int) (*entity.User,
 
 // NOTE - create user repository
 func (r *userRepository) CreateUser(ctx context.Context, user entity.User) (*entity.User, error) {
+	// Hash the password
+	hashedPassword, err := utils.HashPassword(user.Password)
+	if err != nil {
+		return nil, fmt.Errorf("failed to hash password: %v", err)
+	}
+
 	// Check if subject_id exists if it's provided and not zero
 	if user.SubjectID != 0 {
 		// Check if the subject exists
@@ -165,6 +197,7 @@ func (r *userRepository) CreateUser(ctx context.Context, user entity.User) (*ent
 	newUser, err := r.client.User.CreateOne(
 		db.User.Name.Set(user.Name),
 		db.User.Email.Set(user.Email),
+		db.User.Password.Set(hashedPassword),
 		db.User.Day.Set(day),
 		db.User.Month.Set(month),
 		db.User.Year.Set(year),
@@ -185,6 +218,7 @@ func (r *userRepository) CreateUser(ctx context.Context, user entity.User) (*ent
 		ID:        newUser.ID,
 		Name:      newUser.Name,
 		Email:     newUser.Email,
+		Password:  hashedPassword,
 		SubjectID: user.SubjectID,
 		Status:    user.Status,
 		Day:       newUser.Day,

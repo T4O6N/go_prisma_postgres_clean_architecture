@@ -24,6 +24,7 @@ func NewUserHandler(router *gin.Engine, useCase usecase.UserUseCase) {
 
 	users.GET("", handler.GetUsers)
 	users.GET("/:id", handler.GetUserByID)
+	users.GET("by/:name", handler.GetUserByName)
 	users.POST("", handler.CreateUser)
 	users.PUT("/update/:id", handler.UpdateUser)
 	users.DELETE("/delete/:id", handler.DeleteUser)
@@ -105,6 +106,34 @@ func (h *UserHandler) GetUserByID(c *gin.Context) {
 	c.JSON(http.StatusOK, user)
 }
 
+// NOTE - get user by name handler
+// @Summary Get user by Name
+// @Description Get a single user by Name
+// @Tags users
+// @Accept json
+// @Produce json
+// @Param name path string true "User Name"
+// @Success 200 {object} entity.UserResponse
+// @Failure 404 {object} entity.ErrorResponse
+// @Failure 400 {object} entity.ErrorResponse
+// @Failure 500 {object} entity.ErrorResponse
+// @Router /api/v1/users/by/{name} [get]
+func (h *UserHandler) GetUserByName(c *gin.Context) {
+	name := c.Param("name")
+	if name == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user Name"})
+		return
+	}
+
+	user, err := h.useCase.GetUserByName(c, name)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, user)
+}
+
 // NOTE - create user handler
 // @Summary Create a user
 // @Description Create a new user
@@ -126,6 +155,7 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 	newUser := entity.User{
 		Name:      req.Name,
 		Email:     req.Email,
+		Password:  req.Password,
 		SubjectID: req.SubjectID,
 		Status:    true,
 	}

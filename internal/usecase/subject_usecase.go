@@ -2,7 +2,6 @@ package usecase
 
 import (
 	"context"
-	"sample-project/internal/dto"
 	"sample-project/internal/entity"
 	"sample-project/internal/repository"
 )
@@ -12,7 +11,7 @@ type SubjectUsecase interface {
 	GetSubject(ctx context.Context) ([]entity.Subject, error)
 	GetSubjectByID(ctx context.Context, id int) (*entity.Subject, error)
 	CreateSubject(ctx context.Context, subject entity.Subject) (*entity.Subject, error)
-	UpdateSubject(ctx context.Context, id int, updateSubjectDto dto.UpdateSubjectDto) (*entity.Subject, error)
+	UpdateSubject(ctx context.Context, id int, updateSubject entity.Subject) (*entity.Subject, error)
 	DeleteSubject(ctx context.Context, id int) error
 	ClearSubjectCache(ctx context.Context) error
 }
@@ -43,19 +42,17 @@ func (u *subjectUseCase) CreateSubject(ctx context.Context, subject entity.Subje
 }
 
 // NOTE - update subject use case
-func (u *subjectUseCase) UpdateSubject(ctx context.Context, id int, updateSubjectDto dto.UpdateSubjectDto) (*entity.Subject, error) {
+func (u *subjectUseCase) UpdateSubject(ctx context.Context, id int, updateSubject entity.Subject) (*entity.Subject, error) {
 	subject, err := u.repo.GetSubjectByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
 
-	if updateSubjectDto.Name != "" {
-		subject.Name = updateSubjectDto.Name
+	if updateSubject.Name != "" {
+		subject.Name = updateSubject.Name
 	}
 
-	if updateSubjectDto.Status {
-		subject.Status = updateSubjectDto.Status
-	}
+	subject.Status = updateSubject.Status
 
 	return u.repo.UpdateSubject(ctx, id, *subject)
 }

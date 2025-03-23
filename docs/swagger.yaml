@@ -1,21 +1,16 @@
 definitions:
-  dto.CreateSubjectDto:
+  entity.CreateSubjectRequest:
     properties:
       name:
         type: string
-    type: object
-  dto.UpdateSubjectDto:
-    properties:
-      name:
-        type: string
-      status:
-        type: boolean
     type: object
   entity.CreateUserRequest:
     properties:
       email:
         type: string
       name:
+        type: string
+      password:
         type: string
       subject_id:
         type: integer
@@ -24,6 +19,13 @@ definitions:
     properties:
       message:
         description: StatusCode int    `json:"status_code"`
+        type: string
+    type: object
+  entity.LoginRequest:
+    properties:
+      name:
+        type: string
+      password:
         type: string
     type: object
   entity.Subject:
@@ -43,11 +45,27 @@ definitions:
           $ref: '#/definitions/entity.User'
         type: array
     type: object
+  entity.Tokens:
+    properties:
+      access_token:
+        type: string
+      refresh_token:
+        type: string
+    type: object
+  entity.UpdateSubjectRequest:
+    properties:
+      name:
+        type: string
+      status:
+        type: boolean
+    type: object
   entity.UpdateUserRequest:
     properties:
       email:
         type: string
       name:
+        type: string
+      password:
         type: string
       status:
         type: boolean
@@ -67,6 +85,8 @@ definitions:
       month:
         type: integer
       name:
+        type: string
+      password:
         type: string
       status:
         type: boolean
@@ -99,11 +119,17 @@ definitions:
     properties:
       created_at:
         type: string
+      day:
+        type: integer
       email:
         type: string
       id:
         type: integer
+      month:
+        type: integer
       name:
+        type: string
+      password:
         type: string
       status:
         type: boolean
@@ -111,10 +137,71 @@ definitions:
         type: integer
       updated_at:
         type: string
+      year:
+        type: integer
     type: object
 info:
   contact: {}
+  description: This is a sample project API using Golang, Prisma, Postgres, and JWT
+    authentication.
+  title: Sample Project API
+  version: "1.0"
 paths:
+  /api/v1/auth/login:
+    post:
+      consumes:
+      - application/json
+      description: Authenticates a user and returns access & refresh tokens
+      parameters:
+      - description: Login request payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/entity.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/entity.Tokens'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/entity.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/entity.ErrorResponse'
+      summary: Login user
+      tags:
+      - auth
+  /api/v1/auth/me:
+    get:
+      consumes:
+      - application/json
+      description: Retrieves user data using the authorization token
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/entity.User'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/entity.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/entity.ErrorResponse'
+      security:
+      - BearerAuth: []
+      summary: Get authenticated user data
+      tags:
+      - auth
   /api/v1/subjects:
     get:
       consumes:
@@ -142,7 +229,7 @@ paths:
         name: subject
         required: true
         schema:
-          $ref: '#/definitions/dto.CreateSubjectDto'
+          $ref: '#/definitions/entity.CreateSubjectRequest'
       produces:
       - application/json
       responses:
@@ -222,7 +309,7 @@ paths:
         name: subject
         required: true
         schema:
-          $ref: '#/definitions/dto.UpdateSubjectDto'
+          $ref: '#/definitions/entity.UpdateSubjectRequest'
       produces:
       - application/json
       responses:
@@ -342,6 +429,39 @@ paths:
       summary: Get user by ID
       tags:
       - users
+  /api/v1/users/by/{name}:
+    get:
+      consumes:
+      - application/json
+      description: Get a single user by Name
+      parameters:
+      - description: User Name
+        in: path
+        name: name
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/entity.UserResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/entity.ErrorResponse'
+        "404":
+          description: Not Found
+          schema:
+            $ref: '#/definitions/entity.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/entity.ErrorResponse'
+      summary: Get user by Name
+      tags:
+      - users
   /api/v1/users/clear-cache:
     delete:
       consumes:
@@ -437,4 +557,9 @@ paths:
       summary: Update a user
       tags:
       - users
+securityDefinitions:
+  BearerAuth:
+    in: header
+    name: Authorization
+    type: apiKey
 swagger: "2.0"

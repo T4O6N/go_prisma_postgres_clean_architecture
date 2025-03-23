@@ -3,7 +3,6 @@ package delivery
 import (
 	"context"
 	"net/http"
-	"sample-project/internal/dto"
 	"sample-project/internal/entity"
 	"sample-project/internal/usecase"
 	"strconv"
@@ -78,26 +77,26 @@ func (h *SubjectHandler) GetSubjectByID(c *gin.Context) {
 // @Tags subjects
 // @Accept json
 // @Produce json
-// @Param subject body dto.CreateSubjectDto true "Subject data"
+// @Param subject body entity.CreateSubjectRequest true "Subject data"
 // @Success 201 {object} entity.Subject
 // @Router /api/v1/subjects [post]
 func (h *SubjectHandler) CreateSubject(c *gin.Context) {
-	var createSubjectDto dto.CreateSubjectDto
-	if err := c.ShouldBindJSON(&createSubjectDto); err != nil {
+	var subject entity.Subject
+	if err := c.ShouldBindJSON(&subject); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	subject := entity.Subject{
-		Name: createSubjectDto.Name,
+	newSubject := entity.Subject{
+		Name: subject.Name,
 	}
 
-	newSubject, err := h.useCase.CreateSubject(c, subject)
+	subjectCreated, err := h.useCase.CreateSubject(c, newSubject)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusCreated, newSubject)
+	c.JSON(http.StatusCreated, subjectCreated)
 }
 
 // NOTE - update subject handler
@@ -107,7 +106,7 @@ func (h *SubjectHandler) CreateSubject(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param id path int true "Subject ID"
-// @Param subject body dto.UpdateSubjectDto true "Updated subject data"
+// @Param subject body entity.UpdateSubjectRequest true "Updated subject data"
 // @Success 200 {object} entity.Subject
 // @Router /api/v1/subjects/update/{id} [put]
 func (h *SubjectHandler) UpdateSubject(c *gin.Context) {
@@ -117,13 +116,17 @@ func (h *SubjectHandler) UpdateSubject(c *gin.Context) {
 		return
 	}
 
-	var updateSubjectDto dto.UpdateSubjectDto
-	if err := c.ShouldBindJSON(&updateSubjectDto); err != nil {
+	var req entity.UpdateSubjectRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	updatedSubject, err := h.useCase.UpdateSubject(c, id, updateSubjectDto)
+	subjectUpdate := entity.Subject{
+		Name: req.Name,
+	}
+
+	updatedSubject, err := h.useCase.UpdateSubject(c, id, subjectUpdate)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

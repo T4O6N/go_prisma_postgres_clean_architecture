@@ -10,3 +10,12 @@ type Subject struct {
 	UpdatedAt time.Time `json:"updated_at"`
 	User      []User    `json:"user"`
 }
+
+type CreateSubjectRequest struct {
+	Name string `json:"name,omitempty"`
+}
+
+type UpdateSubjectRequest struct {
+	Name   string `json:"name,omitempty"`
+	Status bool   `json:"status,omitempty"`
+}

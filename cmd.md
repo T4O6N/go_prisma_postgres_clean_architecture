@@ -38,3 +38,15 @@
 # REDIS
 - go get github.com/redis/go-redis/v9
 - go get github.com/redis/go-redis/v9/extra/redisotel
+
+# RABBITMQ
+- go get github.com/rabbitmq/amqp091-go
+
+# library to ensure the fields are ordered correctly in the JSON response
+- go get github.com/iancoleman/orderedmap
+
+# jwt
+-go get -u github.com/golang-jwt/jwt/v5
+
+# bcrypt
+- go get golang.org/x/crypto/bcrypt

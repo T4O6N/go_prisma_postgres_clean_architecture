@@ -21,6 +21,13 @@ import (
 	ginSwagger "github.com/swaggo/gin-swagger"
 )
 
+// @title           Sample Project API
+// @version         1.0
+// @description     This is a sample project API using Golang, Prisma, Postgres, and JWT authentication.
+
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
 func main() {
 	// Load environment variables from .env file
 	err := godotenv.Load()
@@ -62,10 +69,12 @@ func main() {
 
 	// Initialize Usecases
 	userUsecase := usecase.NewUserUsecase(userRepo)
+	authUsecase := usecase.NewAuthUsecase(userRepo)
 	subjectUsecase := usecase.NewSubjectUseCase(subjectRepo)
 
 	// Initialize Handlers
 	http.NewUserHandler(router, userUsecase)
+	http.NewAuthHandler(router, authUsecase)
 	http.NewSubjectHandler(router, subjectUsecase)
 
 	// Swagger
